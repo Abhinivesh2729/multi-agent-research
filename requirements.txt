@@ -1,0 +1,16 @@
+django==4.2
+djangorestframework
+psycopg2-binary
+dj-database-url
+python-dotenv
+langchain
+langchain-ollama
+langchain-groq
+langgraph
+streamlit
+mcp
+pytest
+pytest-mock
+pytest-asyncio
+pytest-django
+requests
