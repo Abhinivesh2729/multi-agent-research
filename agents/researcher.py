@@ -1,28 +1,25 @@
+import asyncio
 import logging
-from agents.state import ResearchState
+
 from agents.llm import get_llm
-from agents.prompts import RESEARCHER_SYSTEM_PROMPT, FINAL_ANSWER_TEMPLATE
+from agents.prompts import FINAL_ANSWER_TEMPLATE, RESEARCHER_SYSTEM_PROMPT
+from agents.state import ResearchState
+from mcp.tools.search import handle_search
 
 logger = logging.getLogger(__name__)
 
 
-def _mock_search(query: str) -> str:
-    """Mock search function that returns hardcoded results based on query keywords."""
-    query_lower = query.lower()
-
-    # 5 hardcoded topic results as specified
-    if "france" in query_lower or "paris" in query_lower:
-        return "Paris is the capital and largest city of France. It is located in northern France on the Seine River."
-    elif "python" in query_lower or "programming" in query_lower:
-        return "Python is a high-level, interpreted programming language known for its simplicity and readability."
-    elif "ai" in query_lower or "artificial intelligence" in query_lower:
-        return "Artificial Intelligence (AI) refers to computer systems designed to perform tasks that typically require human intelligence."
-    elif "climate" in query_lower or "weather" in query_lower:
-        return "Climate change refers to long-term shifts in global temperatures and weather patterns, primarily caused by human activities."
-    elif "space" in query_lower or "mars" in query_lower:
-        return "Mars is the fourth planet from the Sun, known as the Red Planet due to its reddish appearance caused by iron oxide on its surface."
-    else:
-        return f"Search results for '{query}': General information available on this topic."
+def _invoke_mcp_web_search(query: str) -> str:
+    """Invoke MCP search handler from sync code and return tool output."""
+    try:
+        return asyncio.run(handle_search(query))
+    except RuntimeError:
+        # Fallback for environments where an event loop is already active.
+        loop = asyncio.new_event_loop()
+        try:
+            return loop.run_until_complete(handle_search(query))
+        finally:
+            loop.close()
 
 
 def researcher_node(state: ResearchState, config: dict = None) -> dict:
@@ -54,48 +51,87 @@ def researcher_node(state: ResearchState, config: dict = None) -> dict:
         else:
             search_query = plan
 
-        emit({"type": "status", "step": "researcher_search",
-              "message": f"Researcher Agent: Searching for \"{search_query}\"..."})
+        emit(
+            {
+                "type": "status",
+                "step": "researcher_search",
+                "message": f"Researcher Agent: Searching for \"{search_query}\"...",
+            }
+        )
+        emit(
+            {
+                "type": "status",
+                "step": "researcher_mcp_invocation",
+                "message": f"Researcher Agent: Invoking MCP tool web_search(query=\"{search_query}\")",
+            }
+        )
 
-        # Perform mock search
-        search_results = _mock_search(search_query)
-        logger.info(f"Search results obtained for: {search_query}")
+        # Invoke MCP web_search tool handler.
+        search_results_raw = _invoke_mcp_web_search(search_query)
+        search_results = (
+            f"MCP Tool Invocation: web_search(query=\"{search_query}\")\n"
+            f"MCP Result: {search_results_raw}"
+        )
+        logger.info("Search results obtained for: %s", search_query)
 
-        emit({"type": "update", "step": "search_done",
-              "message": "Researcher Agent: Found relevant information",
-              "search_results": search_results})
+        emit(
+            {
+                "type": "update",
+                "step": "search_done",
+                "message": "Researcher Agent: Found relevant information",
+                "search_results": search_results,
+            }
+        )
 
-        # Generate final answer using LLM
+        # Generate final answer using LLM.
         llm = get_llm()
-        model_name = getattr(llm, 'model', None) or getattr(llm, 'model_name', 'AI model')
+        model_name = getattr(llm, "model", None) or getattr(
+            llm, "model_name", "AI model"
+        )
         user_question = state.get("user_question", "")
 
         prompt = FINAL_ANSWER_TEMPLATE.format(
             user_question=user_question,
-            search_results=search_results
+            search_results=search_results_raw,
         )
 
         messages = [
             {"role": "system", "content": RESEARCHER_SYSTEM_PROMPT},
-            {"role": "user", "content": prompt}
+            {"role": "user", "content": prompt},
         ]
 
-        emit({"type": "status", "step": "researcher_synthesize",
-              "message": f"Researcher Agent: Synthesizing answer using {model_name}..."})
+        emit(
+            {
+                "type": "status",
+                "step": "researcher_synthesize",
+                "message": f"Researcher Agent: Synthesizing answer using {model_name}...",
+            }
+        )
 
         response = llm.invoke(messages)
         final_answer = response.content
 
         logger.info("Final answer generated")
-        emit({"type": "update", "step": "researcher_done",
-              "message": "Researcher Agent: Answer generated"})
+        emit(
+            {
+                "type": "update",
+                "step": "researcher_done",
+                "message": "Researcher Agent: Answer generated",
+            }
+        )
 
         return {
             "search_results": search_results,
-            "final_answer": final_answer
+            "final_answer": final_answer,
         }
 
     except Exception as e:
-        logger.error(f"Researcher node error: {e}")
-        emit({"type": "error", "step": "researcher_error", "message": f"Researcher failed: {str(e)}"})
+        logger.error("Researcher node error: %s", e)
+        emit(
+            {
+                "type": "error",
+                "step": "researcher_error",
+                "message": f"Researcher failed: {str(e)}",
+            }
+        )
         return {"error": f"Researcher failed: {str(e)}"}

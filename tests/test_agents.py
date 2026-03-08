@@ -61,8 +61,28 @@ def test_build_graph():
     assert graph is not None
 
 
+def test_researcher_includes_mcp_invocation_in_steps(mocker):
+    """Test 5: researcher output explicitly records MCP tool invocation."""
+    mock_llm = mocker.patch('agents.researcher.get_llm')
+    mock_response = mocker.Mock()
+    mock_response.content = "Sample synthesized answer"
+    mock_llm.return_value.invoke.return_value = mock_response
+
+    result = researcher_node({
+        "user_question": "Who is Mr Abhi?",
+        "plan": "Need to search for: Mr Abhi",
+        "search_results": None,
+        "final_answer": None,
+        "error": None
+    })
+
+    assert "search_results" in result
+    assert "MCP Tool Invocation: web_search" in result["search_results"]
+    assert "final_answer" in result
+
+
 def test_graph_full_run(mocker):
-    """Test 5: graph runs end to end with mocked LLM."""
+    """Test 6: graph runs end to end with mocked LLM."""
     # Mock planner LLM
     mock_planner_llm = mocker.patch('agents.planner.get_llm')
     mock_planner_response = mocker.Mock()

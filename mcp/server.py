@@ -6,6 +6,7 @@ from mcp.server.stdio import stdio_server
 from mcp.types import Tool, TextContent
 from mcp.server.models import InitializationOptions
 from .tools.search import SEARCH_TOOL, handle_search
+from .tools.calculator import CALCULATOR_TOOL, handle_calculation
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -22,6 +23,11 @@ async def list_tools() -> list[Tool]:
             name=SEARCH_TOOL["name"],
             description=SEARCH_TOOL["description"],
             inputSchema=SEARCH_TOOL["inputSchema"]
+        ),
+        Tool(
+            name=CALCULATOR_TOOL["name"],
+            description=CALCULATOR_TOOL["description"],
+            inputSchema=CALCULATOR_TOOL["inputSchema"]
         )
     ]
 
@@ -32,6 +38,10 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     if name == "web_search":
         query = arguments.get("query", "")
         result = await handle_search(query)
+        return [TextContent(type="text", text=result)]
+    elif name == "calculator":
+        expression = arguments.get("expression", "")
+        result = await handle_calculation(expression)
         return [TextContent(type="text", text=result)]
     else:
         raise ValueError(f"Unknown tool: {name}")

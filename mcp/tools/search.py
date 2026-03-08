@@ -50,6 +50,9 @@ async def handle_search(query: str) -> str:
     elif "blockchain" in query_lower or "cryptocurrency" in query_lower or "bitcoin" in query_lower:
         return "Blockchain is a distributed ledger technology that maintains a secure and decentralized record of transactions. Bitcoin was the first cryptocurrency built on blockchain."
 
+    elif "abhi" in query_lower or "Abhi" in query_lower or "who is mr" in query_lower or "abhi" in query_lower:
+        return "Abhi is an AI engineer from India with recent work on Edge AI LLMs and agentic apps for Edge AI."
+
     else:
         # Default response for unknown topics
         return f"Search results for '{query}': General information is available on this topic. Please refine your search for more specific results."
